@@ -27,7 +27,7 @@ def place(tc, sig, cid):
     equity = float(tc.get_account().equity)
     qty = min(int(equity * RISK_PCT / sig["risk"]), int(equity * 2 / sig["entry"]))
     if qty < 1:
-        notify(f"Signal {sig['side']} but size rounds to 0, skipped.")
+        print(f"Signal {sig['side']} but size rounds to 0, skipped.")
         return
     long = sig["side"] == "long"
     target = sig["entry"] + (RR * sig["risk"] if long else -RR * sig["risk"])
@@ -37,9 +37,8 @@ def place(tc, sig, cid):
         take_profit=TakeProfitRequest(limit_price=round(target, 2)),
         stop_loss=StopLossRequest(stop_price=round(sig["stop"], 2)),
         client_order_id=cid))
-    notify(f"{sig['side'].upper()} {qty} {SYMBOL} @ ~{sig['entry']:.2f}  "
-           f"stop {sig['stop']:.2f}  target {target:.2f}  (risk {RISK_PCT:.1%})",
-           title="IFVG entry")
+    print(f"{sig['side'].upper()} {qty} {SYMBOL} @ ~{sig['entry']:.2f}  "
+          f"stop {sig['stop']:.2f}  target {target:.2f}")
 
 
 def check_mode(tc, dc):
@@ -55,14 +54,12 @@ def check_mode(tc, dc):
     d0 = datetime.combine(d, time(9, 25), NY)
     bars = fetch_qqq(dc, d0, d0 + timedelta(minutes=95))
     res = evaluate(bars, lv)
+    print(levels_text(lv), res)
     if res["status"] == "signal":
-        out = (f"{res['side']} at {res['t']:%H:%M} ~{res['entry']:.2f}, "
-               f"stop {res['stop']:.2f}, risk ${res['risk']:.2f}/share")
-    elif res["status"] == "no_trade":
-        out = f"no trade ({res['reason']})"
+        out = f"would have gone {res['side']} at {res['t']:%H:%M}"
     else:
-        out = "no setup before 11:00"
-    notify(f"Check OK for {d}. {levels_text(lv)}. Result: {out}", title="IFVG check")
+        out = "no trade"
+    notify(f"{d:%a %-d %b}: {out}", title="Test OK ✅")
 
 
 def main():
@@ -86,11 +83,11 @@ def main():
     try:
         lv = build_levels(dc, today)
     except Exception as e:
-        notify(f"Couldn't build levels, no trading today: {e}", title="IFVG error")
+        notify(f"No trading today: couldn't load market data ({e})", title="⚠️ Bot needs attention")
         return
-    notify(levels_text(lv), title="IFVG levels")
+    print(levels_text(lv))
     if not any(lv[k] for k in ("asia_hi", "asia_lo", "lon_hi", "lon_lo")):
-        notify("All levels already taken before the open, no trade today.")
+        print("All levels already taken before the open, no trade today.")
         return
 
     start = datetime.combine(today, time(9, 31, 8), NY)
@@ -100,7 +97,7 @@ def main():
     while True:
         now = now_ny()
         if now.time() >= time(WIN_END.hour, WIN_END.minute, 30):
-            notify("No setup by 11:00, no trade today.")
+            print("No setup by 11:00, no trade today.")
             return
         try:
             bars = fetch_qqq(dc, datetime.combine(today, time(9, 25), NY), now)
@@ -111,17 +108,17 @@ def main():
             res = {"status": "waiting"}
 
         if res["status"] == "no_trade":
-            notify(f"No trade today: {res['reason']}.")
+            print(f"No trade today: {res['reason']}.")
             return
         if res["status"] == "signal":
             age = now - (res["t"] + timedelta(minutes=1))
             if age > timedelta(minutes=3):
-                notify(f"Signal at {res['t']:%H:%M} was missed (bot started late), skipping.")
+                notify(f"Missed today's signal at {res['t']:%H:%M} because GitHub started the bot late. No trade.", title="⚠️ Bot needs attention")
                 return
             try:
                 place(tc, res, cid)
             except Exception as e:
-                notify(f"Order failed: {e}", title="IFVG error")
+                notify(f"Order was rejected by Alpaca: {e}", title="⚠️ Bot needs attention")
             return
 
         nxt = (now + timedelta(minutes=1)).replace(second=8, microsecond=0)
