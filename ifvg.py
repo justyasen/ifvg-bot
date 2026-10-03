@@ -38,8 +38,8 @@ def notify(msg, title="IFVG bot"):
     topic = os.environ.get("NTFY_TOPIC")
     if topic:
         try:
-            requests.post(f"https://ntfy.sh/{topic}", data=msg.encode(),
-                          headers={"Title": title}, timeout=10)
+            requests.post("https://ntfy.sh/", timeout=10,
+                          json={"topic": topic, "title": title, "message": msg})
         except Exception as e:
             print("ntfy failed:", e)
 
