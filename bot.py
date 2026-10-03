@@ -6,8 +6,11 @@ python bot.py --check   no orders: replays the most recent session and reports w
 import sys
 import time as _time
 from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
-from ifvg import (NY, RR, RISK_PCT, SYMBOL, WIN_END, build_levels, client_id, clients,
+SOFIA = ZoneInfo("Europe/Sofia")
+
+from ifvg import (NY, RR, RISK_PCT, SYMBOL, WIN_END, WIN_START, build_levels, client_id, clients,
                   evaluate, fetch_qqq, levels_text, notify, now_ny, session)
 
 
@@ -69,26 +72,42 @@ def main():
 
     now = now_ny()
     today = now.date()
-    if not session(tc, today):
-        print("Market closed today.")
-        return
     if not (time(9, 0) <= now.time() <= time(10, 0)):
         print("Outside start window (other DST cron), exiting.")
+        return
+    day = f"{today:%a %-d %b}"
+    if not session(tc, today):
+        notify(f"{day}: US market holiday.", title="⚪ No trading today")
         return
     cid = client_id(today)
     if order_exists(tc, cid):
         print("Already traded today.")
         return
 
+    # ── Pre-flight: can it trade today? ──
+    acct = tc.get_account()
+    if acct.trading_blocked or acct.account_blocked or str(acct.status.value) != "ACTIVE":
+        notify(f"{day}: Alpaca account can't trade (status {acct.status.value}).",
+               title="⚠️ Bot needs attention")
+        return
     try:
         lv = build_levels(dc, today)
     except Exception as e:
-        notify(f"No trading today: couldn't load market data ({e})", title="⚠️ Bot needs attention")
+        notify(f"{day}: couldn't load market data, so no trading today ({e}).",
+               title="⚠️ Bot needs attention")
         return
     print(levels_text(lv))
-    if not any(lv[k] for k in ("asia_hi", "asia_lo", "lon_hi", "lon_lo")):
-        print("All levels already taken before the open, no trade today.")
+    names = {"asia_hi": "Asia high", "asia_lo": "Asia low",
+             "lon_hi": "London high", "lon_lo": "London low"}
+    live = [names[k] for k in names if lv[k] is not None]
+    if not live:
+        notify(f"{day}: all overnight levels were already taken before the open.",
+               title="⚪ No trade today")
         return
+    w0 = datetime.combine(today, WIN_START, NY).astimezone(SOFIA)
+    w1 = datetime.combine(today, WIN_END, NY).astimezone(SOFIA)
+    notify(f"{day}: watching {', '.join(live)} from {w0:%H:%M} to {w1:%H:%M}.",
+           title=f"🟢 Ready to trade · {len(live)} level{'s' if len(live) > 1 else ''}")
 
     start = datetime.combine(today, time(9, 31, 8), NY)
     if now_ny() < start:
