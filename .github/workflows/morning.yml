@@ -1,0 +1,30 @@
+name: morning
+on:
+  schedule:
+    # Two times so one always lands at ~09:20 New York, in summer and winter time.
+    - cron: "20 13 * * 1-5"
+    - cron: "20 14 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      check:
+        description: "Check mode (no orders, replays last session)"
+        type: boolean
+        default: true
+concurrency:
+  group: morning
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 140
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python bot.py ${{ (github.event_name == 'workflow_dispatch' && inputs.check) && '--check' || '' }}
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
