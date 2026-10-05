@@ -3,6 +3,7 @@
 python bot.py           live run (used by GitHub Actions)
 python bot.py --check   no orders: replays the most recent session and reports what it would have done
 """
+import os
 import sys
 import time as _time
 from datetime import datetime, time, timedelta
@@ -72,10 +73,18 @@ def main():
 
     now = now_ny()
     today = now.date()
-    if not (time(9, 0) <= now.time() <= time(10, 0)):
-        print("Outside start window (other DST cron), exiting.")
-        return
+    # Two crons exist (summer/winter). Only the one matching current NY time continues.
+    sched = os.environ.get("SCHEDULE", "")
+    if sched:
+        utc_hour = 13 if now.utcoffset().total_seconds() == -4 * 3600 else 14
+        if not sched.startswith(f"20 {utc_hour} "):
+            print("Other DST cron, exiting.")
+            return
     day = f"{today:%a %-d %b}"
+    if now.time() >= time(10, 50):
+        notify(f"{day}: GitHub started the bot too late ({now.astimezone(SOFIA):%H:%M}), no trading today.",
+               title="⚠️ Bot needs attention")
+        return
     if not session(tc, today):
         notify(f"{day}: US market holiday.", title="⚪ No trading today")
         return
