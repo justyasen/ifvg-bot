@@ -81,6 +81,11 @@ def main():
             print("Other DST cron, exiting.")
             return
     day = f"{today:%a %-d %b}"
+    if now.time() < time(9, 0):
+        notify(f"{day}: bot was started at {now:%H:%M} New York time, before the 09:00 "
+               f"earliest start. Check the cron-job.org time zone.",
+               title="⚠️ Bot needs attention")
+        return
     if now.time() >= time(10, 50):
         notify(f"{day}: GitHub started the bot too late ({now.astimezone(SOFIA):%H:%M}), no trading today.",
                title="⚠️ Bot needs attention")
