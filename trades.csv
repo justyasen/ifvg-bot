@@ -35,3 +35,4 @@ date,outcome,side,qty,entry,exit,stop,r,pnl,mfe_r,minutes,equity
 2026-11-20,target,short,196,640.16,635.462959,643.23,1.53,920.62,1.63,15,101763.52
 2026-11-23,no_trade,,,,,,,0,,,101760.92
 2026-11-24,no_trade,,,,,,,0,,,101760.92
+2026-11-25,no_trade,,,,,,,0,,,101760.92
